@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "yt-knowledge-base"
+version = "0.1.0"
+description = "Turn any YouTube channel into a searchable knowledge base"
+requires-python = ">=3.10"
+dependencies = [
+    # YouTube extraction
+    "yt-dlp>=2024.1.0",
+    "youtube-transcript-api>=0.6.2",
+
+    # Text processing
+    "langchain>=0.1.12",
+    "langchain-community>=0.0.29",
+    "langchain-openai>=0.1.1",
+
+    # Embeddings (local, no API key needed)
+    "sentence-transformers>=2.6.1",
+
+    # Vector database
+    "chromadb>=0.4.24",
+
+    # LLM providers (choose one or both)
+    "openai>=1.14.0",          # cloud option
+    "ollama>=0.1.7",           # local option
+
+    # Utilities
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.1",
+    "rich>=13.7.1",            # pretty CLI output
+    "tqdm>=4.66.2",            # progress bars
+    "tenacity>=8.2.3",         # retry logic
+    "tiktoken>=0.6.0",         # token counting
+
+    # Data storage
+    "sqlalchemy>=2.0.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.1.1",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.23.6",
+    "black>=24.3.0",
+    "ruff>=0.3.4",
+    "mypy>=1.9.0",
+]
+
+[project.scripts]
+yt-ingest = "src.cli:ingest"
+yt-query  = "src.cli:query"
+yt-build  = "src.cli:build_db"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "W", "F", "I"]
