@@ -2,6 +2,7 @@
 steps_to_follow
 check.py
 branch_commit_map.txt
+channel_scrapper.py
 vector_db/
 data/
 logs/
