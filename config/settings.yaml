@@ -1,0 +1,51 @@
+# ─── Paths ───────────────────────────────────────────────────────────
+paths:
+  raw_data:       "data/raw"
+  processed_data: "data/processed"
+  sqlite_db:      "data/db/metadata.db"
+  vector_db:      "vector_db"
+  logs:           "logs"
+
+# ─── Ingestion ───────────────────────────────────────────────────────
+ingestion:
+  max_videos: 500          # Cap to avoid runaway downloads
+  rate_limit_seconds: 2    # Pause between API calls
+  languages: ["en"]        # Transcript languages to accept
+  skip_shorts: true        # Ignore YouTube Shorts (< 60 seconds)
+  min_duration_seconds: 60
+
+# ─── Processing ──────────────────────────────────────────────────────
+processing:
+  chunk_size: 400          # Target tokens per chunk
+  chunk_overlap: 80        # Overlap to preserve context across chunks
+  min_chunk_length: 50     # Discard chunks shorter than this (chars)
+
+# ─── Embedding ───────────────────────────────────────────────────────
+embedding:
+  # Free local model — no API key needed, ~90MB download
+  model_name: "all-MiniLM-L6-v2"
+  batch_size: 64           # How many chunks to embed at once
+  device: "cpu"            # Use "cuda" if you have a GPU
+
+# ─── Vector Store ────────────────────────────────────────────────────
+vector_store:
+  collection_name: "yt_knowledge_base"
+  n_results: 20            # How many chunks to retrieve per query
+
+# ─── Router ──────────────────────────────────────────────────────────
+router:
+  top_k_after_routing: 5   # Chunks passed to LLM after router filters
+  similarity_threshold: 0.3  # Drop chunks below this score
+  strategy: "similarity"   # Options: "similarity", "mmr", "hybrid"
+
+# ─── LLM ─────────────────────────────────────────────────────────────
+llm:
+  provider: "openai"       # "openai" or "ollama"
+  max_tokens: 1024
+  temperature: 0.2         # Lower = more factual, less creative
+
+# ─── Logging ─────────────────────────────────────────────────────────
+logging:
+  level_development: "DEBUG"
+  level_production: "INFO"
+  format: "json"           # "json" for production, "pretty" for dev
