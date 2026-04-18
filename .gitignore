@@ -2,10 +2,9 @@
 steps_to_follow
 check.py
 branch_commit_map.txt
-settings.yaml
 vector_db/
 data/
-
+logs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
