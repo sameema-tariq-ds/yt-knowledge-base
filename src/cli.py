@@ -85,12 +85,22 @@ def build_db():
     from src.storage.vector_store import VectorStore
     from src.ingestion.metadata_store import MetadataStore
     from src.utils.config_loader import cfg
+    from src.utils.file_utils import sanitize_filename
     from tqdm import tqdm
     import json
+    import argparse
+    from src.utils.logger import get_logger
+
+    logger = get_logger("cli.ingest")
+
+    parser = argparse.ArgumentParser(description="Give YouTube channel handle you added in ingestion call")
+    parser.add_argument("--handle", default="channel", help="Short name for output files")
+    args = parser.parse_args()
 
     console.print(Panel("[bold blue]Building vector database...[/bold blue]"))
 
-    transcript_dir = Path(cfg.paths.raw_data) / "transcripts"
+    channel_handle = sanitize_filename(args.handle)
+    transcript_dir = Path(cfg.paths.raw_data) / "transcripts" / channel_handle
     json_files     = list(transcript_dir.glob("*.json"))
 
     if not json_files:
@@ -100,7 +110,7 @@ def build_db():
     embedder = Embedder()
     vector_store = VectorStore()
     metadata_store = MetadataStore()
-
+    logger.info(json_files)
     total_chunks = 0
     for json_file in tqdm(json_files, desc="Building index"):
         with open(json_file, "r", encoding="utf-8") as f:
@@ -183,3 +193,6 @@ def query():
             f"Chunks used: {response.chunk_count} | "
             f"Model: {response.model_used}[/dim]"
         )
+
+if __name__ == "__main__":
+    build_db()

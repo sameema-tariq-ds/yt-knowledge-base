@@ -12,8 +12,8 @@ Why preserve timestamps?
   jump directly to the relevant moment in the video.
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
+from typing import Dict, Any, List
 import tiktoken
 
 from src.utils.config_loader import cfg
@@ -24,7 +24,11 @@ from src.processing.text_cleaner import clean_transcript
 logger = get_logger(__name__)
 
 # Use the same tokenizer as GPT models for consistent token counting
-TOKENIZER = tiktoken.get_encoding("cl100k_base")
+try:
+    TOKENIZER = tiktoken.get_encoding("cl100k_base")
+except Exception as e:
+    logger.exception("Failed to initialize tokenizer")
+    raise RuntimeError("Tokenizer initialization failed") from e
 
 
 @dataclass
@@ -45,16 +49,36 @@ class Chunk:
     def to_dict(self) -> dict:
         return self.__dict__
 
+def _validate_video_data(video_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and sanitize input video data."""
+
+    if not isinstance(video_data, dict):
+        raise TypeError("video_data must be a dictionary")
+
+    required = ["video_id"]
+    for field in required:
+        if not video_data.get(field):
+            raise ValueError(f"Missing required field: {field}")
+
+    # Ensure safe defaults
+    video_data.setdefault("title", "")
+    video_data.setdefault("channel", "")
+    video_data.setdefault("url", "")
+    video_data.setdefault("transcript_segments", [])
+
+    return video_data
+
 
 def count_tokens(text: str) -> int:
     """Count tokens using the cl100k tokenizer (same as OpenAI embeddings)."""
-    return len(TOKENIZER.encode(text))
+    try:
+        return len(TOKENIZER.encode(text))
+    except Exception:
+        logger.warning("Tokenization failed, falling back to char length")
+        return len(text) // 4  # rough fallback
 
 
-def segments_to_text_blocks(
-    segments: list[dict],
-    target_tokens: int
-) -> list[dict]:
+def segments_to_text_blocks(segments: list[dict], target_tokens: int) -> list[dict]:
     """
     Merge transcript segments into blocks of ~target_tokens each.
     Preserves the start_time of the first segment in each block.
@@ -66,29 +90,41 @@ def segments_to_text_blocks(
     Returns:
         List of {text, start_time} dicts
     """
+    if not segments:
+        logger.warning("No segments to process")
+        return []
+    
     blocks = []
     current_text = ""
     current_start = 0.0
     current_tokens = 0
 
     for seg in segments:
-        seg_text = seg.get("text", "").strip()
-        seg_tokens = count_tokens(seg_text)
+        try:
+            seg_text = seg.get("text", "").strip()
+            if not seg_text:
+                continue
 
-        if current_tokens + seg_tokens > target_tokens and current_text:
-            # Flush current block
-            blocks.append({
-                "text": current_text.strip(),
-                "start_time": current_start,
-            })
-            current_text = seg_text
-            current_start = seg.get("start", 0.0)
-            current_tokens = seg_tokens
-        else:
-            if not current_text:
+            seg_tokens = count_tokens(seg_text)
+
+            if current_tokens + seg_tokens > target_tokens and current_text:
+                # Flush current block
+                blocks.append({
+                    "text": current_text.strip(),
+                    "start_time": current_start,
+                })
+                current_text = seg_text
                 current_start = seg.get("start", 0.0)
-            current_text += " " + seg_text
-            current_tokens += seg_tokens
+                current_tokens = seg_tokens
+            else:
+                if not current_text:
+                    current_start = seg.get("start", 0.0)
+                current_text += " " + seg_text
+                current_tokens += seg_tokens
+
+        except Exception as e:
+            logger.exception("Failed to process segment, skipping ...")
+            continue
 
     # Don't forget the last block
     if current_text.strip():
@@ -115,79 +151,92 @@ def create_chunks(video_data: dict) -> list[Chunk]:
     Returns:
         List of Chunk objects ready for embedding
     """
+    try:
+        video_data = _validate_video_data(video_data)
 
-    video_id    = video_data["video_id"]
-    title       = video_data.get("title", "")
-    channel     = video_data.get("channel", "")
-    base_url    = video_data.get("url", f"https://youtube.com/watch?v={video_id}")
-    segments    = video_data.get("transcript_segments", [])
+        video_id    = video_data["video_id"]
+        title       = video_data.get("title", "")
+        channel     = video_data.get("channel", "")
+        base_url    = video_data.get("url", f"https://youtube.com/watch?v={video_id}")
+        segments    = video_data.get("transcript_segments", [])
 
-    chunk_size    = cfg.processing.chunk_size
-    chunk_overlap = cfg.processing.chunk_overlap
-    min_length    = cfg.processing.min_chunk_length
+        chunk_size    = cfg.processing.chunk_size
+        chunk_overlap = cfg.processing.chunk_overlap
+        min_length    = cfg.processing.min_chunk_length
 
-    # Step 1: Build text blocks aligned with timestamps
-    blocks = segments_to_text_blocks(segments, target_tokens=chunk_size)
+        # Step 1: Build text blocks aligned with timestamps
+        blocks = segments_to_text_blocks(segments, target_tokens=chunk_size)
 
-    if not blocks:
-        logger.warning(f"No blocks generated for {video_id}")
-        return []
+        if not blocks:
+            logger.warning(f"No blocks generated for {video_id}")
+            return []
 
-    # Step 2: Create overlapping windows over the blocks
-    # Instead of overlapping at the token level, we overlap entire blocks
-    # This is simpler and keeps timestamps accurate
-    chunks = []
-    num_blocks = len(blocks)
+        # Step 2: Create overlapping windows over the blocks
+        # Instead of overlapping at the token level, we overlap entire blocks
+        # This is simpler and keeps timestamps accurate
+        # First block formation: i=0[:50], i=1[entire], i=2[50:]
+        chunks: List[Chunk] = []
+        num_blocks = len(blocks)
 
-    for i, block in enumerate(blocks):
-        # Build text: previous block tail + current block + next block head
-        parts = []
+        for i, block in enumerate(blocks):
+            # Build text: previous block tail + current block + next block head
+            try:
+                parts = []
 
-        if i > 0:
-            # Append last ~overlap tokens of previous block
-            prev_text = blocks[i - 1]["text"]
-            prev_tokens = TOKENIZER.encode(prev_text)
-            overlap_tokens = prev_tokens[-chunk_overlap:]
-            parts.append(TOKENIZER.decode(overlap_tokens))
+                # Previous block overlap
+                if i > 0:
+                    # Append last ~overlap tokens of previous block
+                    prev_text = blocks[i - 1]["text"]
+                    prev_tokens = TOKENIZER.encode(prev_text)
+                    overlap_tokens = prev_tokens[-chunk_overlap:]
+                    parts.append(TOKENIZER.decode(overlap_tokens))
 
-        parts.append(block["text"])
+                # Current block overlap
+                parts.append(block["text"])
 
-        if i < num_blocks - 1:
-            # Prepend first ~overlap tokens of next block
-            next_text = blocks[i + 1]["text"]
-            next_tokens = TOKENIZER.encode(next_text)
-            overlap_tokens = next_tokens[:chunk_overlap]
-            parts.append(TOKENIZER.decode(overlap_tokens))
+                # Next block overlap
+                if i < num_blocks - 1:
+                    # Prepend first ~overlap tokens of next block
+                    next_text = blocks[i + 1]["text"]
+                    next_tokens = TOKENIZER.encode(next_text)
+                    overlap_tokens = next_tokens[:chunk_overlap]
+                    parts.append(TOKENIZER.decode(overlap_tokens))
 
-        combined_text = " ".join(parts)
-        cleaned_text  = clean_transcript(combined_text)
+                combined_text = " ".join(parts)
+                cleaned_text  = clean_transcript(combined_text)
 
-        # Skip chunks that are too short to be useful
-        if len(cleaned_text) < min_length:
-            continue
+                # Skip chunks that are too short to be useful
+                if len(cleaned_text) < min_length:
+                    continue
 
-        start_time = block["start_time"]
-        # Format: 1h23m45s for YouTube's timestamp format
-        timestamp_str = _seconds_to_yt_timestamp(start_time)
-        timestamp_link = f"{base_url}&t={int(start_time)}s"
+                start_time = block["start_time"]
+                timestamp_link = f"{base_url}&t={int(start_time)}s"
 
-        chunk = Chunk(
-            chunk_id=       f"{video_id}_{i:04d}",
-            video_id=       video_id,
-            video_title=    title,
-            channel=        channel,
-            url=            base_url,
-            text=           cleaned_text,
-            start_time=     start_time,
-            timestamp_link= timestamp_link,
-            chunk_index=    i,
-            total_chunks=   num_blocks,
-            token_count=    count_tokens(cleaned_text),
-        )
-        chunks.append(chunk)
+                chunk = Chunk(
+                    chunk_id=       f"{video_id}_{i:04d}",
+                    video_id=       video_id,
+                    video_title=    title,
+                    channel=        channel,
+                    url=            base_url,
+                    text=           cleaned_text,
+                    start_time=     start_time,
+                    timestamp_link= timestamp_link,
+                    chunk_index=    i,
+                    total_chunks=   num_blocks,
+                    token_count=    count_tokens(cleaned_text),
+                )
+                chunks.append(chunk)
 
-    logger.debug(f"Video {video_id}: {len(segments)} segments → {len(chunks)} chunks")
-    return chunks
+            except Exception as e:
+                logger.exception("Failed to create chunks")
+                continue
+
+        logger.debug(f"Video {video_id}: {len(segments)} segments → {len(chunks)} chunks")
+        return chunks
+    
+    except Exception as e:
+        logger.exception("Chunk pipeline failed")
+        raise RuntimeError
 
 
 def _seconds_to_yt_timestamp(seconds: float) -> str:
