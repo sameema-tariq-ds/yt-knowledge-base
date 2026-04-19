@@ -27,8 +27,9 @@ from youtube_transcript_api import (
     VideoUnavailable,
 )
 
+from src.utils.logger import logging
 from src.utils.config_loader import cfg
-from src.utils.logging import logging
+from src.utils.file_utils import sanitize_filename
 
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ def fetch_transcript(video: dict) -> Optional[Dict]:
     }
 
 
-def fetch_all_transcripts(videos: list[dict], save_dir: str | None = None, max_workers: int = 5) -> list[dict]:
+def fetch_all_transcripts(videos: list[dict], channel_handle: str | None = None, max_workers: int = 5) -> list[dict]:
     """
     Fetch transcripts for all videos using a thread pool.
 
@@ -151,7 +152,9 @@ def fetch_all_transcripts(videos: list[dict], save_dir: str | None = None, max_w
     Returns:
         List of videos that successfully fetched transcripts
     """
-    save_path = Path(save_dir or cfg.paths.raw_data) / "transcripts"
+    channel_handle = sanitize_filename(channel_handle) if channel_handle else None
+
+    save_path = Path(cfg.paths.raw_data) / "transcripts" / channel_handle
     save_path.mkdir(parents=True, exist_ok=True)
 
     # Thread-safe containers
