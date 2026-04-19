@@ -27,7 +27,7 @@ def ingest():
       yt-ingest https://www.youtube.com/@3blue1brown --handle 3b1b
     """
     import argparse
-    from src.ingestion.channel_scraper import get_channel_video_ids, save_video_list
+    from src.ingestion.channel_scrapper import get_channel_video_ids, save_video_list
     from src.ingestion.transcript_fetcher import fetch_all_transcripts
     from src.ingestion.metadata_store import MetadataStore
     from src.utils.logger import get_logger
@@ -47,13 +47,13 @@ def ingest():
     try:
         # Step 1: Get all video IDs
         console.print("\n[cyan]Step 1/3:[/cyan] Fetching video list...")
-        videos = get_channel_video_ids(args.channel_url)
-        save_video_list(videos, args.handle)
-        console.print(f"  ✓ Found [bold]{len(videos)}[/bold] videos")
+        videos_metadata = list(get_channel_video_ids(args.channel_url))
+        videos_count = save_video_list(videos_metadata, args.handle)
+        console.print(f"  ✓ Found [bold]{videos_count}[/bold] videos")
 
         # Step 2: Download transcripts
         console.print("\n[cyan]Step 2/3:[/cyan] Downloading transcripts...")
-        transcribed = fetch_all_transcripts(videos)
+        transcribed = fetch_all_transcripts(videos_metadata, args.handle)
         console.print(f"  ✓ Got transcripts for [bold]{len(transcribed)}[/bold] videos")
 
         # Step 3: Save metadata to SQLite

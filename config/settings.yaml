@@ -8,11 +8,14 @@ paths:
 
 # ─── Ingestion ───────────────────────────────────────────────────────
 ingestion:
-  max_videos: 500          # Cap to avoid runaway downloads
+  max_videos: 2            # Cap to avoid runaway downloads
   rate_limit_seconds: 2    # Pause between API calls
   languages: ["en"]        # Transcript languages to accept
   skip_shorts: true        # Ignore YouTube Shorts (< 60 seconds)
-  min_duration_seconds: 60
+  min_duration_seconds: 60 # min duration of yt video
+  max_socket_timeout: 15   # 
+  request_delay_min: 0.5   # Minimum delay (seconds) between requests to avoid throttling/blocking
+  request_delay_max: 1     # Maximum delay (seconds) between requests to stimulate human-like traffic
 
 # ─── Processing ──────────────────────────────────────────────────────
 processing:
