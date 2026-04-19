@@ -13,18 +13,48 @@ This module normalizes transcripts before chunking.
 import re
 import html
 
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _validate_input(text: str) -> str:
+    """Validate and sanitize input text."""
+
+    if text is None:
+        logger.warning("Received None input for transcript cleaning")
+        return ""
+
+    if not isinstance(text, str):
+        logger.error("Invalid input type for transcript cleaning", extra={"type": type(text)})
+        raise TypeError("Input must be a string")
+
+    # Strip dangerous control characters (basic sanitization)
+    return text.replace("\x00", "").strip()
+
 
 def clean_transcript(text: str) -> str:
     """
     Apply all cleaning steps to a raw transcript string.
     Each step is a separate function for easy testing/debugging.
     """
-    text = decode_html_entities(text)
-    text = remove_bracket_annotations(text)
-    text = normalize_whitespace(text)
-    text = remove_filler_words(text)
-    text = fix_basic_punctuation(text)
-    return text.strip()
+    try:
+        text = _validate_input(text)
+        
+        if not text:
+            logger.warning("Received empty input for transcript cleaning")
+            return ""
+
+        text = decode_html_entities(text)
+        text = remove_bracket_annotations(text)
+        text = normalize_whitespace(text)
+        text = remove_filler_words(text)
+        text = fix_basic_punctuation(text)
+        return text.strip()
+    
+    except Exception as e:
+        logger.exception("Transcript cleaning failed")
+        raise RuntimeError("Failed to clean transcript") from e
 
 
 def decode_html_entities(text: str) -> str:
