@@ -195,4 +195,4 @@ def query():
         )
 
 if __name__ == "__main__":
-    build_db()
+    query()

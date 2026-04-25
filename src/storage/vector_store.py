@@ -167,19 +167,20 @@ class VectorStore:
         try:
             query_embedding = _validate_query_embedding(query_embedding)
 
+            # Check if database is empty
             total_count = self.collection.count()
             if total_count == 0:
                 logger.warning("Vector store is empty")
                 return []
             
-            num_retrieve_query = min(n_results or cfg.vector_store.n_results, total_count)
+            num_retrieve_query = min(n_results, total_count)
 
             query_kwargs = {
                 "query_embeddings": [query_embedding],
                 "n_results": num_retrieve_query,
                 "include": ["documents", "metadatas", "distances"],
             }
-            if where:
+            if where: # If user gives filter → apply it
                 query_kwargs["where"] = where # filter the chunk and then search
 
             results = self.collection.query(**query_kwargs)
