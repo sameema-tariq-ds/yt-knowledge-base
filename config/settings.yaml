@@ -8,7 +8,7 @@ paths:
 
 # ─── Ingestion ───────────────────────────────────────────────────────
 ingestion:
-  max_videos: 50           # Cap to avoid runaway downloads
+  max_videos: 3            # Cap to avoid runaway downloads
   rate_limit_seconds: 2    # Pause between API calls
   languages: ["en"]        # Transcript languages to accept
   skip_shorts: true        # Ignore YouTube Shorts (< 60 seconds)
