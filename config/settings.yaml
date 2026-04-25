@@ -37,16 +37,21 @@ vector_store:
 
 # ─── Router ──────────────────────────────────────────────────────────
 router:
-  top_k_after_routing: 5   # Chunks passed to LLM after router filters
+  top_k_after_routing:  5   # Chunks passed to LLM after router filters
   similarity_threshold: 0.3  # Drop chunks below this score
   strategy: "similarity"   # Options: "similarity", "mmr", "hybrid"
 
 # ─── LLM ─────────────────────────────────────────────────────────────
 llm:
-  provider: "openai"       # "openai" or "ollama"
+  provider:   "cerebras"       # "cerebras"
+  model:      "llama3.1-8b"
   max_tokens: 1024
   temperature: 0.2         # Lower = more factual, less creative
-
+  max_retries: 3
+# ─── QUERY ─────────────────────────────────────────────────────────────
+query:
+  max_query_len: 1000       # maximum length of a question user may ask
+  
 # ─── Logging ─────────────────────────────────────────────────────────
 logging:
   level_development: "DEBUG"
