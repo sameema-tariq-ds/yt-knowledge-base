@@ -61,7 +61,7 @@ def load_config(config_path: str = "config/settings.yaml") -> ConfigNode:
 
     # Step 4: Attach secrets from environment (never put in YAML)
     raw_config["secrets"] = {
-        "openrouter_api_key": os.getenv("OPENROUTER_API_KEY_API_KEY", ""),
+        "cerebras_api_key": os.getenv("CEREBRAS_API_KEY", ""),
     }
 
     return ConfigNode(raw_config)

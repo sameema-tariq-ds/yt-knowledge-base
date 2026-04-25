@@ -8,9 +8,7 @@ Production:  JSON lines — easy to parse with tools like jq or ship to Datadog
 """
 
 import logging
-import logging.config
 import json
-import os
 from pathlib import Path
 from datetime import datetime
 
