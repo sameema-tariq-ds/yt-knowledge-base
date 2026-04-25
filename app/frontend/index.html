@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Turn YouTube into Data</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #141820;
+        --panel-soft: #1b212b;
+        --line: #2c3442;
+        --text: #eef2f7;
+        --muted: #a8b3c2;
+        --accent: #2fbf71;
+        --accent-dark: #24965a;
+        --danger: #f26d6d;
+        --focus: #8bc6ff;
+        font-family: "Times New Roman", Times, serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        cursor: none;
+        background:
+          radial-gradient(circle at 16% 20%, rgba(255, 45, 45, 0.18), transparent 32%),
+          radial-gradient(circle at 78% 68%, rgba(255, 184, 0, 0.10), transparent 36%),
+          linear-gradient(180deg, #07070a, #0b0d10);
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -3;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 72px 72px;
+      }
+
+      .video-wall {
+        position: fixed;
+        inset: -52px;
+        z-index: -2;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
+        gap: 22px;
+        padding: 72px;
+        opacity: 0.18;
+        pointer-events: none;
+        transform: rotate(-4deg) scale(1.05);
+      }
+
+      .video-tile {
+        min-height: 96px;
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
+          rgba(255,255,255,0.04);
+        box-shadow: 0 18px 42px rgba(0,0,0,0.22);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .video-tile::before {
+        content: "";
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        width: 50px;
+        height: 34px;
+        border-radius: 10px;
+        background: rgba(255, 45, 45, 0.84);
+      }
+
+      .video-tile::after {
+        content: "";
+        position: absolute;
+        left: 39px;
+        top: 27px;
+        border-left: 12px solid #fff;
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+      }
+
+      .video-tile span {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 18px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(238,242,247,0.85), rgba(238,242,247,0.10));
+      }
+
+      .cursor-circle {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 50;
+        width: 28px;
+        height: 28px;
+        border: 1px solid #ff2d2d;
+        border-radius: 50%;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        transition: width 0.18s ease, height 0.18s ease, opacity 0.18s ease;
+      }
+
+      .cursor-glow {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 49;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,45,45,0.14), transparent 62%);
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        mix-blend-mode: screen;
+      }
+
+      main {
+        width: min(1040px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 28px;
+        align-items: end;
+        margin-bottom: 28px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2.4rem, 6vw, 4.8rem);
+        line-height: 0.95;
+        letter-spacing: 0;
+      }
+
+      header p,
+      .helper {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .status-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 20px;
+        background: rgba(20, 24, 32, 0.9);
+      }
+
+      .status-label {
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .status-value {
+        font-size: 1.2rem;
+        font-weight: 800;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 20px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 24px;
+        background: rgba(20, 24, 32, 0.94);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+      }
+
+      .panel + .panel {
+        margin-top: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 800;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 14px 16px;
+        color: var(--text);
+        background: #0e1218;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 150px;
+        resize: vertical;
+      }
+
+      input:focus,
+      textarea:focus {
+        outline: 3px solid var(--focus);
+        border-color: transparent;
+      }
+
+      input:disabled,
+      textarea:disabled {
+        cursor: not-allowed;
+        opacity: 0.62;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      button {
+        min-height: 44px;
+        border: 0;
+        border-radius: 6px;
+        padding: 0 16px;
+        color: #07100b;
+        background: var(--accent);
+        font: inherit;
+        font-weight: 850;
+        cursor: none;
+      }
+
+      button:hover:not(:disabled) {
+        background: var(--accent-dark);
+      }
+
+      button:focus {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      button:disabled {
+        cursor: none;
+        opacity: 0.58;
+      }
+
+      .button-secondary {
+        color: var(--text);
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+      }
+
+      .button-secondary:hover:not(:disabled) {
+        background: #222a36;
+      }
+
+      .message {
+        min-height: 24px;
+        margin-top: 14px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .message.error {
+        color: var(--danger);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 12px;
+        background: #10151d;
+        cursor: none;
+        transition: border-color 0.2s, background 0.2s, transform 0.2s;
+      }
+
+      .stat:hover,
+      .stat.active {
+        border-color: #ff2d2d;
+        background: #151c26;
+        transform: translateY(-2px);
+      }
+
+      .stat span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .stat strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.35rem;
+      }
+
+      .detail-box {
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: rgba(14, 18, 24, 0.96);
+      }
+
+      .detail-box h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+      }
+
+      .detail-box ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .detail-box li {
+        margin-bottom: 8px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .detail-box a {
+        color: #9bd4ff;
+      }
+
+      .answer-box {
+        min-height: 320px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: rgba(14, 18, 24, 0.96);
+      }
+
+      .answer-text {
+        color: var(--text);
+        line-height: 1.7;
+        white-space: pre-wrap;
+      }
+
+      .sources {
+        margin-top: 22px;
+      }
+
+      .sources h3 {
+        margin-bottom: 10px;
+        font-size: 1rem;
+      }
+
+      .sources ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .sources li {
+        margin-bottom: 8px;
+        color: var(--muted);
+      }
+
+      .sources a {
+        color: #9bd4ff;
+      }
+
+      .metadata {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: var(--muted);
+        background: #10151d;
+        font-size: 0.86rem;
+      }
+
+      .yt-red {
+        color: #ff0000;
+        font-weight: 900;
+      }
+      @media (max-width: 820px) {
+        header,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .stats {
+          grid-template-columns: 1fr;
+        }
+
+        .video-wall {
+          grid-template-columns: repeat(2, minmax(140px, 1fr));
+          opacity: 0.12;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="video-wall" aria-hidden="true">
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+      <div class="video-tile"><span></span></div>
+    </div>
+    <div class="cursor-glow" id="cursorGlow"></div>
+    <div class="cursor-circle" id="cursorCircle"></div>
+    <main>
+      <header>
+        <div>
+          <h1>Turn <span class="yt-red">YOUTUBE</span> into DATA</h1>
+          <p>A production-grade RAG pipeline that extracts, embeds, and indexes
+      entire YouTube channels — then lets you query across hundreds of
+      videos using natural language.</p>
+        </div>
+        <div class="status-card" aria-live="polite">
+          <div class="status-label">Pipeline status</div>
+          <div class="status-value" id="pipelineStatus">Waiting for a channel URL</div>
+        </div>
+      </header>
+
+      <section class="grid">
+        <div>
+          <section class="panel">
+            <h2>1. Add YouTube URL</h2>
+            <label for="ytUrl">YouTube channel URL</label>
+            <input
+              id="ytUrl"
+              type="url"
+              autocomplete="url"
+              placeholder="https://www.youtube.com/@channel"
+            />
+            <div class="actions">
+              <button id="runPipelineBtn" type="button">Run pipeline</button>
+              <button class="button-secondary" id="resetBtn" type="button">Reset page</button>
+            </div>
+            <div class="message" id="pipelineMessage"></div>
+            <div class="stats" id="pipelineStats" hidden>
+              <div class="stat" data-detail="videos" role="button" tabindex="0">
+                <span>Videos found</span>
+                <strong id="videosFound">0</strong>
+              </div>
+              <div class="stat" data-detail="transcripts" role="button" tabindex="0">
+                <span>Transcripts</span>
+                <strong id="transcriptsDownloaded">0</strong>
+              </div>
+              <div class="stat" data-detail="chunks" role="button" tabindex="0">
+                <span>New chunks indexed</span>
+                <strong id="chunksIndexed">0</strong>
+              </div>
+            </div>
+            <div class="detail-box" id="pipelineDetails" hidden></div>
+          </section>
+
+          <section class="panel">
+            <h2>2. Ask Question</h2>
+            <label for="question">Your question</label>
+            <textarea
+              id="question"
+              disabled
+              placeholder="Run the pipeline first, then ask a question."
+            ></textarea>
+            <div class="actions">
+              <button id="askBtn" type="button" disabled>Ask question</button>
+              <button class="button-secondary" id="clearAnswerBtn" type="button">Clear answer</button>
+            </div>
+            <div class="message" id="questionMessage"></div>
+          </section>
+        </div>
+
+        <section class="answer-box" aria-live="polite">
+          <h2>Answer</h2>
+          <div class="answer-text" id="answerText">The answer will appear here after you ask a question.</div>
+          <div class="metadata" id="metadata"></div>
+          <div class="sources" id="sources"></div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const cursorGlow = document.getElementById("cursorGlow");
+      const cursorCircle = document.getElementById("cursorCircle");
+
+      document.addEventListener("mousemove", (event) => {
+        cursorGlow.style.left = event.clientX + "px";
+        cursorGlow.style.top = event.clientY + "px";
+        cursorCircle.style.left = event.clientX + "px";
+        cursorCircle.style.top = event.clientY + "px";
+      });
+
+      document.querySelectorAll("button, input, textarea, a").forEach((element) => {
+        element.addEventListener("mouseenter", () => {
+          cursorCircle.style.width = "44px";
+          cursorCircle.style.height = "44px";
+        });
+        element.addEventListener("mouseleave", () => {
+          cursorCircle.style.width = "28px";
+          cursorCircle.style.height = "28px";
+        });
+      });
+
+      const state = {
+        pipelineReady: false,
+        pipelineRunning: false,
+        questionRunning: false,
+        pipelineDetails: null,
+      };
+
+      const els = {
+        ytUrl: document.getElementById("ytUrl"),
+        question: document.getElementById("question"),
+        runPipelineBtn: document.getElementById("runPipelineBtn"),
+        resetBtn: document.getElementById("resetBtn"),
+        askBtn: document.getElementById("askBtn"),
+        clearAnswerBtn: document.getElementById("clearAnswerBtn"),
+        pipelineStatus: document.getElementById("pipelineStatus"),
+        pipelineMessage: document.getElementById("pipelineMessage"),
+        questionMessage: document.getElementById("questionMessage"),
+        pipelineStats: document.getElementById("pipelineStats"),
+        pipelineDetails: document.getElementById("pipelineDetails"),
+        statCards: document.querySelectorAll("[data-detail]"),
+        videosFound: document.getElementById("videosFound"),
+        transcriptsDownloaded: document.getElementById("transcriptsDownloaded"),
+        chunksIndexed: document.getElementById("chunksIndexed"),
+        answerText: document.getElementById("answerText"),
+        metadata: document.getElementById("metadata"),
+        sources: document.getElementById("sources"),
+      };
+
+      els.runPipelineBtn.addEventListener("click", runPipeline);
+      els.askBtn.addEventListener("click", askQuestion);
+      els.resetBtn.addEventListener("click", resetPage);
+      els.clearAnswerBtn.addEventListener("click", clearAnswer);
+      els.statCards.forEach((card) => {
+        card.addEventListener("click", () => openPipelinePage(card.dataset.detail));
+        card.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openPipelinePage(card.dataset.detail);
+          }
+        });
+      });
+      els.ytUrl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          runPipeline();
+        }
+      });
+      els.question.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          askQuestion();
+        }
+      });
+
+      syncControls();
+
+      async function runPipeline() {
+        const url = els.ytUrl.value.trim();
+        clearPipelineMessage();
+
+        if (!url) {
+          setPipelineMessage("Please enter a YouTube channel URL.", true);
+          els.ytUrl.focus();
+          return;
+        }
+
+        state.pipelineRunning = true;
+        state.pipelineReady = false;
+        els.pipelineStatus.textContent = "Running pipeline";
+        setPipelineMessage("Fetching videos, downloading transcripts, and building the index...");
+        clearAnswer();
+        syncControls();
+
+        try {
+          const response = await fetch("/api/run-pipeline", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const data = await readJson(response);
+
+          if (!response.ok) {
+            throw new Error(data.detail || "The pipeline could not be completed.");
+          }
+
+          state.pipelineReady = true;
+          state.pipelineDetails = data;
+          els.pipelineStatus.textContent = "Ready for questions";
+          els.pipelineStats.hidden = false;
+          els.videosFound.textContent = data.videos_found ?? 0;
+          els.transcriptsDownloaded.textContent = data.transcripts_downloaded ?? 0;
+          els.chunksIndexed.textContent = data.chunks_indexed ?? 0;
+          setPipelineMessage(
+            `${data.message || "The channel is indexed. You can ask questions now."} ` +
+            `Transcripts: ${data.transcripts_cached ?? 0} cached, ` +
+            `${data.transcripts_fetched ?? 0} fetched, ${data.transcripts_failed ?? 0} failed.`
+          );
+          renderPipelineSummary(data);
+          els.question.placeholder = "Ask anything about the indexed channel.";
+          els.question.focus();
+        } catch (error) {
+          state.pipelineReady = false;
+          state.pipelineDetails = null;
+          els.pipelineStatus.textContent = "Pipeline failed";
+          setPipelineMessage(error.message, true);
+        } finally {
+          state.pipelineRunning = false;
+          syncControls();
+        }
+      }
+
+      function renderPipelineSummary(data) {
+        savePipelineDetails(data);
+        els.pipelineDetails.hidden = true;
+        els.pipelineDetails.innerHTML = "";
+        setActiveDetail(null);
+      }
+
+      function openPipelinePage(type) {
+        if (!state.pipelineDetails) {
+          els.pipelineDetails.hidden = false;
+          els.pipelineDetails.innerHTML = `<h3>No pipeline details yet</h3><p class="helper">Run the pipeline first.</p>`;
+          return;
+        }
+
+        setActiveDetail(type);
+        const handle = state.pipelineDetails.handle;
+        const pages = {
+          videos: "/static/videos.html",
+          transcripts: "/static/transcripts.html",
+          chunks: "/static/chunks.html",
+        };
+        const page = pages[type];
+        if (!page || !handle) {
+          return;
+        }
+        savePipelineDetails(state.pipelineDetails);
+        window.open(`${page}?handle=${encodeURIComponent(handle)}`, "_blank", "noopener");
+      }
+
+      function savePipelineDetails(data) {
+        if (!data || !data.handle) {
+          return;
+        }
+        try {
+          sessionStorage.setItem(`pipelineDetails:${data.handle}`, JSON.stringify(data));
+        } catch {
+          // Storage can be unavailable in strict browser modes; the API pages still work.
+        }
+      }
+
+      function showPipelineDetail(type) {
+        if (!state.pipelineDetails) {
+          els.pipelineDetails.hidden = false;
+          els.pipelineDetails.innerHTML = `<h3>No pipeline details yet</h3><p class="helper">Run the pipeline first.</p>`;
+          return;
+        }
+
+        if (type === "videos") {
+          const videos = state.pipelineDetails.videos || [];
+          els.pipelineDetails.innerHTML = `
+            <h3>Video links</h3>
+            ${renderList(videos, (video) => {
+              const title = escapeHtml(video.title || "Untitled video");
+              const url = video.url || "";
+              return url
+                ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener">${title}</a>`
+                : title;
+            })}
+          `;
+          return;
+        }
+
+        if (type === "transcripts") {
+          const transcripts = state.pipelineDetails.transcripts || [];
+          els.pipelineDetails.innerHTML = `
+            <h3>Transcript files</h3>
+            ${renderList(transcripts, (item) => {
+              const title = escapeHtml(item.title || item.video_id || "Transcript");
+              const path = escapeHtml(item.path || "");
+              return `<strong>${title}</strong><br><span>${path}</span>`;
+            })}
+          `;
+          return;
+        }
+
+        if (type === "chunks") {
+          const chunks = state.pipelineDetails.chunks || [];
+          const total = state.pipelineDetails.total_chunks_available;
+          els.pipelineDetails.innerHTML = `
+            <h3>Chunk indexing</h3>
+            <p class="helper">New chunks indexed this run: ${escapeHtml(state.pipelineDetails.chunks_indexed ?? 0)}${total === undefined || total === null ? "" : `. Total chunks available: ${escapeHtml(total)}`}.</p>
+            ${renderList(chunks, (item) => {
+              const title = escapeHtml(item.title || item.video_id || "Video");
+              const created = escapeHtml(item.chunks_created ?? 0);
+              const added = escapeHtml(item.new_chunks_indexed ?? 0);
+              const url = item.url
+                ? `<br><a href="${escapeAttribute(item.url)}" target="_blank" rel="noopener">Open video</a>`
+                : "";
+              return `<strong>${title}</strong><br><span>${added} new / ${created} created</span>${url}`;
+            })}
+          `;
+        }
+      }
+
+      function renderList(items, renderItem) {
+        if (!items.length) {
+          return `<p class="helper">No items available.</p>`;
+        }
+        return `<ul>${items.map((item) => `<li>${renderItem(item)}</li>`).join("")}</ul>`;
+      }
+
+      function setActiveDetail(type) {
+        els.statCards.forEach((card) => {
+          card.classList.toggle("active", card.dataset.detail === type);
+        });
+      }
+
+      async function askQuestion() {
+        const query = els.question.value.trim();
+        els.questionMessage.textContent = "";
+        els.questionMessage.classList.remove("error");
+
+        if (!state.pipelineReady) {
+          setQuestionMessage("Run the pipeline before asking a question.", true);
+          return;
+        }
+
+        if (!query) {
+          setQuestionMessage("Please type a question.", true);
+          els.question.focus();
+          return;
+        }
+
+        state.questionRunning = true;
+        els.answerText.textContent = "Searching and generating an answer...";
+        els.metadata.innerHTML = "";
+        els.sources.innerHTML = "";
+        syncControls();
+
+        try {
+          const response = await fetch("/api/query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          const data = await readJson(response);
+
+          if (!response.ok) {
+            throw new Error(data.detail || "The query could not be completed.");
+          }
+
+          renderAnswer(data);
+          setQuestionMessage("Answer generated.");
+        } catch (error) {
+          els.answerText.textContent = "No answer yet.";
+          setQuestionMessage(error.message, true);
+        } finally {
+          state.questionRunning = false;
+          syncControls();
+        }
+      }
+
+      function renderAnswer(data) {
+        els.answerText.textContent = data.answer || "No answer returned.";
+
+        const metadata = data.metadata || {};
+        const pills = [];
+        if (metadata.query_type) pills.push(`Type: ${metadata.query_type}`);
+        if (metadata.chunk_count !== undefined) pills.push(`Chunks: ${metadata.chunk_count}`);
+        if (metadata.model_used) pills.push(`Model: ${metadata.model_used}`);
+        els.metadata.innerHTML = pills.map((text) => `<span class="pill">${escapeHtml(text)}</span>`).join("");
+
+        if (!data.sources || data.sources.length === 0) {
+          els.sources.innerHTML = "";
+          return;
+        }
+
+        const sourceItems = data.sources
+          .map((source) => {
+            const title = escapeHtml(source.title || "Untitled source");
+            const url = source.url;
+            const similarity = source.similarity !== undefined ? ` (${source.similarity})` : "";
+            if (url) {
+              return `<li><a href="${escapeAttribute(url)}" target="_blank" rel="noopener">${title}</a>${escapeHtml(similarity)}</li>`;
+            }
+            return `<li>${title}${escapeHtml(similarity)}</li>`;
+          })
+          .join("");
+
+        els.sources.innerHTML = `<h3>Sources</h3><ul>${sourceItems}</ul>`;
+      }
+
+      function resetPage() {
+        state.pipelineReady = false;
+        state.pipelineRunning = false;
+        state.questionRunning = false;
+        state.pipelineDetails = null;
+        els.ytUrl.value = "";
+        els.question.value = "";
+        els.question.placeholder = "Run the pipeline first, then ask a question.";
+        els.pipelineStatus.textContent = "Waiting for a channel URL";
+        els.pipelineStats.hidden = true;
+        els.pipelineDetails.hidden = true;
+        els.pipelineDetails.innerHTML = "";
+        els.videosFound.textContent = "0";
+        els.transcriptsDownloaded.textContent = "0";
+        els.chunksIndexed.textContent = "0";
+        clearPipelineMessage();
+        els.questionMessage.textContent = "";
+        els.questionMessage.classList.remove("error");
+        clearAnswer();
+        setActiveDetail(null);
+        syncControls();
+        els.ytUrl.focus();
+      }
+
+      function clearAnswer() {
+        els.answerText.textContent = "The answer will appear here after you ask a question.";
+        els.metadata.innerHTML = "";
+        els.sources.innerHTML = "";
+        els.questionMessage.textContent = "";
+        els.questionMessage.classList.remove("error");
+      }
+
+      function syncControls() {
+        els.runPipelineBtn.disabled = state.pipelineRunning || state.questionRunning;
+        els.ytUrl.disabled = state.pipelineRunning || state.questionRunning;
+        els.question.disabled = !state.pipelineReady || state.pipelineRunning || state.questionRunning;
+        els.askBtn.disabled = !state.pipelineReady || state.pipelineRunning || state.questionRunning;
+        els.runPipelineBtn.textContent = state.pipelineRunning ? "Running..." : "Run pipeline";
+        els.askBtn.textContent = state.questionRunning ? "Asking..." : "Ask question";
+      }
+
+      async function readJson(response) {
+        const text = await response.text();
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { detail: text };
+        }
+      }
+
+      function setPipelineMessage(message, isError = false) {
+        els.pipelineMessage.textContent = message;
+        els.pipelineMessage.classList.toggle("error", isError);
+      }
+
+      function clearPipelineMessage() {
+        els.pipelineMessage.textContent = "";
+        els.pipelineMessage.classList.remove("error");
+      }
+
+      function setQuestionMessage(message, isError = false) {
+        els.questionMessage.textContent = message;
+        els.questionMessage.classList.toggle("error", isError);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function escapeAttribute(value) {
+        return escapeHtml(value).replaceAll("`", "&#096;");
+      }
+    </script>
+  </body>
+</html>
