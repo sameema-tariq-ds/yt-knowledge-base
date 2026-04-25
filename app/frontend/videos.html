@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pipeline Videos</title>
+    <link rel="stylesheet" href="/static/viewer.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="/">Back to dashboard</a>
+        <h1>Videos</h1>
+        <p id="summary">Loading videos...</p>
+      </header>
+      <section id="content" class="list"></section>
+    </main>
+    <script src="/static/viewer.js"></script>
+    <script>
+      loadViewer("videos", renderVideos);
+
+      function renderVideos(data) {
+        document.getElementById("summary").textContent = `${data.count} videos for ${data.handle}`;
+        const items = data.videos.map((video) => `
+          <article class="item">
+            <h2>${escapeHtml(video.title || "Untitled video")}</h2>
+            <p>${escapeHtml(video.video_id || "")}</p>
+            <div class="meta">
+              <span>Duration: ${escapeHtml(video.duration || 0)} seconds</span>
+              <span>Views: ${escapeHtml(video.view_count || 0)}</span>
+            </div>
+            ${video.url ? `<a href="${escapeAttribute(video.url)}" target="_blank" rel="noopener">Open video</a>` : ""}
+          </article>
+        `);
+        document.getElementById("content").innerHTML = items.join("") || emptyState("No videos found.");
+      }
+    </script>
+  </body>
+</html>

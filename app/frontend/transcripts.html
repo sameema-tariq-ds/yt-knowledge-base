@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pipeline Transcripts</title>
+    <link rel="stylesheet" href="/static/viewer.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="/">Back to dashboard</a>
+        <h1>Transcripts</h1>
+        <p id="summary">Loading transcripts...</p>
+      </header>
+      <section id="content" class="list"></section>
+    </main>
+
+    <script src="/static/viewer.js"></script>
+    <script>
+      loadViewer("transcripts", renderTranscripts);
+
+      function renderTranscripts(data) {
+        document.getElementById("summary").textContent =
+          `${data.count} transcripts for ${data.handle}`;
+
+        const items = data.transcripts.map((item) => `
+          <article class="item">
+            <h2>${escapeHtml(item.title || "Untitled video")}</h2>
+
+            <!-- Transcript preview -->
+            <p class="transcript">
+              ${escapeHtml((item.text || "").slice(0, 300))}...
+            </p>
+
+            <div class="actions">
+              ${item.url ? `
+                <a href="${escapeAttribute(item.url)}" target="_blank" rel="noopener">
+                  Transcript
+                </a>
+              ` : ""}
+
+              ${
+                item.video_id ? `
+                <a href="/api/pipeline/${encodeURIComponent(data.handle)}/transcripts/${encodeURIComponent(item.video_id)}/download">
+                  Download (.md)
+                </a>
+              ` : ""
+              }
+            </div>
+          </article>
+        `);
+
+        document.getElementById("content").innerHTML =
+          items.join("") || emptyState("No transcripts found.");
+      }
+    </script>
+  </body>
+</html>

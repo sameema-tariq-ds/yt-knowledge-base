@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pipeline Chunks</title>
+    <link rel="stylesheet" href="/static/viewer.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="/">Back to dashboard</a>
+        <h1>Chunks</h1>
+        <p id="summary">Loading chunks...</p>
+      </header>
+      <section id="content" class="list"></section>
+    </main>
+    <script src="/static/viewer.js"></script>
+    <script>
+      loadViewer("chunks", renderChunks);
+
+      function renderChunks(data) {
+        document.getElementById("summary").textContent = `${data.chunk_count} chunks across ${data.video_count} videos for ${data.handle}`;
+        const items = data.videos.map((video) => `
+          <article class="item">
+            <h2>${escapeHtml(video.title || "Untitled video")}</h2>
+            <div class="meta">
+              <span>${escapeHtml(video.chunk_count || 0)} chunks</span>
+              ${video.url ? `<a href="${escapeAttribute(video.url)}" target="_blank" rel="noopener">Open video</a>` : ""}
+            </div>
+            <div class="chunks">
+              ${(video.chunks || []).map((chunk) => `
+                <section class="chunk">
+                  <h3>#${escapeHtml(chunk.chunk_index)} · ${escapeHtml(chunk.chunk_id)}</h3>
+                  <div class="meta">
+                    <span>Start: ${escapeHtml(Math.round(chunk.start_time || 0))}s</span>
+                    <span>Tokens: ${escapeHtml(chunk.token_count || 0)}</span>
+                    <a href="${escapeAttribute(chunk.timestamp_link || video.url || "#")}" target="_blank" rel="noopener">Open timestamp</a>
+                  </div>
+                  <p>${escapeHtml(chunk.preview || "")}</p>
+                </section>
+              `).join("")}
+            </div>
+          </article>
+        `);
+        document.getElementById("content").innerHTML = items.join("") || emptyState("No chunks found.");
+      }
+    </script>
+  </body>
+</html>
